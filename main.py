@@ -2,17 +2,18 @@ from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import SessionLocal, User, Fichaje, engine, Base  # IMPORTANTE: Asegúrate de importar engine y Base
+# IMPORTANTE: Asegúrate de importar Base y engine
+from database import SessionLocal, User, Fichaje, get_db, Base, engine 
 from passlib.context import CryptContext
 from datetime import datetime
 
-# --- 1. LÍNEA CRÍTICA ---
-# Esto crea tus tablas (User, Fichaje) en la base de datos de Render
-# si no existen. Esto probablemente esté causando el error 500.
+# --- 1. LA LÍNEA QUE FALTABA ---
+# Esto crea tus tablas (User, Fichaje) en la nueva base de datos de Render
 try:
     Base.metadata.create_all(bind=engine)
+    print("Tablas creadas (si no existían).")
 except Exception as e:
-    print(f"Error creating tables: {e}")
+    print(f"Error al crear tablas: {e}")
 
 # --- 2. LOS MOLDES (SCHEMAS) ---
 # Esto arregla el error 422
@@ -39,12 +40,7 @@ app.add_middleware(
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# (La función 'get_db' ya se importa desde database.py)
 
 @app.get("/")
 def root():
@@ -97,19 +93,17 @@ def fichar_salida(data: FichajeData, db: Session = Depends(get_db)):
     db.refresh(fichaje)
     return {"message": f"Salida registrada para {user.username} a las {fichaje.hora_salida}"}
 
-# --- GET FICHAJES (LA FUNCIÓN ARREGLADA QUE CAUSABA EL ERROR 500) ---
+# --- GET FICHAJES (LA FUNCIÓN ARREGLADA) ---
 @app.get("/fichajes")
 def get_fichajes(db: Session = Depends(get_db)):
     
     try:
         fichajes_db = db.query(Fichaje).all()
         
-        # Formateamos los datos de forma segura
         respuesta = []
         for f in fichajes_db:
-            # Buscamos al usuario de forma manual para evitar el error 500
             user = db.query(User).filter(User.id == f.user_id).first()
-            username = user.username if user else "Usuario Desconocido" # Por si el usuario fue borrado
+            username = user.username if user else "Usuario Desconocido"
 
             respuesta.append({
                 "usuario": username,
@@ -118,6 +112,7 @@ def get_fichajes(db: Session = Depends(get_db)):
             })
         return respuesta
     except Exception as e:
-        # Si algo falla (ej. la tabla 'fichaje' no existe), no "casques"
         print(f"Error en /fichajes: {e}")
-        return [] # Devuelve una lista vacía en lugar de un error 500
+        return []
+
+
