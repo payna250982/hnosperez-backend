@@ -7,7 +7,8 @@ function App() {
   const [fichajes, setFichajes] = useState([]);
   const [message, setMessage] = useState("");
 
-  const API = "http://127.0.0.1:8000"; // URL del backend
+  // ESTA ES LA LÍNEA QUE HEMOS CAMBIADO:
+  const API = import.meta.env.VITE_API_URL; // URL del backend
 
   // Registrar usuario
   const handleRegister = async () => {
