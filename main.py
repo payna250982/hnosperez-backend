@@ -2,12 +2,11 @@ from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import SessionLocal, User, Fichaje  # Asumo que estos se importan desde database.py
+from database import SessionLocal, User, Fichaje  # Tus importaciones
 from passlib.context import CryptContext
 from datetime import datetime
 
 # --- 1. LOS MOLDES (SCHEMAS) ---
-# Esto le dice a FastAPI qué "paquetes" (Body) esperar
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -42,23 +41,23 @@ def root():
 
 # --- REGISTRO CORREGIDO ---
 @app.post("/register")
-def register(user: UserCreate, db: Session = Depends(get_db)): # <-- 1. CAMBIO AQUÍ
-    if db.query(User).filter(User.username == user.username).first(): # <-- 2. CAMBIO AQUÍ
+def register(user: UserCreate, db: Session = Depends(get_db)):
+    if db.query(User).filter(User.username == user.username).first():
         raise HTTPException(status_code=400, detail="Usuario ya existe")
     
-    hashed_password = pwd_context.hash(user.password) # <-- 3. CAMBIO AQUÍ
+    hashed_password = pwd_context.hash(user.password)
     
-    db_user = User(username=user.username, hashed_password=hashed_password) # <-- 4. CAMBIO AQUÍ
+    db_user = User(username=user.username, hashed_password=hashed_password)
     
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return {"message": f"Usuario {db_user.username} creado correctamente"} # <-- 5. CAMBIO AQUÍ
+    return {"message": f"Usuario {db_user.username} creado correctamente"}
 
 # --- FICHAR ENTRADA CORREGIDO ---
 @app.post("/fichar_entrada")
-def fichar_entrada(data: FichajeData, db: Session = Depends(get_db)): # <-- 1. CAMBIO AQUÍ
-    user = db.query(User).filter(User.username == data.username).first() # <-- 2. CAMBIO AQUÍ
+def fichar_entrada(data: FichajeData, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == data.username).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
@@ -70,8 +69,8 @@ def fichar_entrada(data: FichajeData, db: Session = Depends(get_db)): # <-- 1. C
 
 # --- FICHAR SALIDA CORREGIDO ---
 @app.post("/fichar_salida")
-def fichar_salida(data: FichajeData, db: Session = Depends(get_db)): # <-- 1. CAMBIO AQUÍ
-    user = db.query(User).filter(User.username == data.username).first() # <-- 2. CAMBIO AQUÍ
+def fichar_salida(data: FichajeData, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == data.username).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     fichaje = (
@@ -87,17 +86,22 @@ def fichar_salida(data: FichajeData, db: Session = Depends(get_db)): # <-- 1. CA
     db.refresh(fichaje)
     return {"message": f"Salida registrada para {user.username} a las {fichaje.hora_salida}"}
 
+# --- GET FICHAJES (LA FUNCIÓN ARREGLADA) ---
 @app.get("/fichajes")
 def get_fichajes(db: Session = Depends(get_db)):
-    # Asumo que tu models.py tiene una 'relationship' en Fichaje llamada 'user'
-    fichajes = db.query(Fichaje).all()
     
-    # Formateamos los datos para que coincidan con tu App.jsx
+    fichajes_db = db.query(Fichaje).all()
+    
+    # Formateamos los datos de forma segura
     respuesta = []
-    for f in fichajes:
+    for f in fichajes_db:
+        # Buscamos al usuario de forma manual para evitar el error 500
+        user = db.query(User).filter(User.id == f.user_id).first()
+        username = user.username if user else "Usuario Desconocido" # Por si el usuario fue borrado
+
         respuesta.append({
-            "usuario": f.user.username, # Esto necesita la relationship 'user'
-            "entrada": f.hora_entrada.isoformat(), # Usamos isoformat para que JS lo entienda
-            "salida": f.hora_salida.isoformat() if f.hora_salida else None # Igual aquí
+            "usuario": username,
+            "entrada": f.hora_entrada.isoformat(),
+            "salida": f.hora_salida.isoformat() if f.hora_salida else None
         })
     return respuesta
