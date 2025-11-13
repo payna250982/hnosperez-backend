@@ -2,6 +2,7 @@ fastapi
 uvicorn[standard]
 SQLAlchemy
 fastapi-cors
-passlib[bcrypt]
+passlib
+bcrypt
 python-jose[cryptography]
 psycopg2-binary
