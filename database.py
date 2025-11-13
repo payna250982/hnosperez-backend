@@ -6,27 +6,26 @@ from sqlalchemy.orm import sessionmaker, relationship
 # 1. Coge la URL de la base de datos de Render (del "Environment")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# 2. Si no la encuentra (ej. en tu PC), usa un archivo local (opcional)
-# PERO para Render, SIEMPRE usará la URL de arriba.
-if DATABASE_URL is None:
-    DATABASE_URL = "sqlite:///./timetracker.db" # Tu base de datos antigua
+connect_args = {} # Empezamos sin argumentos extra
 
-# 3. Le decimos que use PostgreSQL (si la URL existe) o SQLite si no.
+# 2. Comprobamos si estamos usando SQLite (ej. en local)
+if DATABASE_URL.startswith("sqlite"):
+    # Si es SQLite, AÑADIMOS el argumento que daba el error
+    connect_args = {"check_same_thread": False}
+
+# 3. Comprobamos si hay que arreglar la URL de postgres (un truco de Render)
 if DATABASE_URL.startswith("postgres://"):
-    # Arreglo para Heroku/Render que usa 'postgres://' pero SQLAlchemy prefiere 'postgresql://'
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    engine = create_engine(DATABASE_URL)
-else:
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+
+# 4. Creamos el "motor" y le pasamos los argumentos (que estarán vacíos si es Postgres)
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
-# --- TUS MODELOS (Los he movido de models.py aquí por simplicidad) ---
-# (Si tus modelos están en models.py, asegúrate de que importas Base)
-# *ACTUALIZACIÓN*: Tu main.py los importa de database.py, así que TIENEN que estar aquí.
+# --- TUS MODELOS (Los has importado desde aquí en main.py) ---
 
 class User(Base):
     __tablename__ = "users"
@@ -55,4 +54,3 @@ def get_db():
         yield db
     finally:
         db.close()
-
